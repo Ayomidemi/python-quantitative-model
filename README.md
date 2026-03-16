@@ -91,6 +91,22 @@ If `--annual-return` is omitted, default is `0.12`.
 python main.py watchlist-review
 ```
 
+## Personal dashboard frontend (Streamlit)
+
+Run your own local dashboard UI:
+
+```bash
+source .venv/bin/activate
+streamlit run app/dashboard.py
+```
+
+What you get in the UI:
+
+- Portfolio value, P&L, return, annualized volatility
+- Positions table and allocation chart
+- Single-ticker forecasting panel (momentum, mean return, GARCH/historical vol)
+- Monte Carlo simulation controls and risk outcomes
+
 ## Notes for NG + US usage
 
 - US symbols generally work directly with Yahoo (`AAPL`, `MSFT`, etc.).
