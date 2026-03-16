@@ -1,4 +1,12 @@
 ticker,exchange,shares,avg_cost,currency,price_source,symbol_yf,manual_price,notes
-AAPL,US,5,195.00,USD,yfinance,AAPL,,Core US tech holding
-MSFT,US,3,405.00,USD,yfinance,MSFT,,Cloud/AI exposure
-ZENITHBANK,NG,2000,40.00,NGN,manual,,47.50,Nigerian bank example with manual pricing
+AMZN,US,2.03564209,0,USD,yfinance,AMZN,,Active position
+GLD,US,0.27129634,0,USD,yfinance,GLD,,Active position
+NVDA,US,1.6278477,0,USD,yfinance,NVDA,,Active position
+VSCO,US,2.24133615,0,USD,yfinance,VSCO,,Active position
+MTNN,NG,41,0,NGN,yfinance,MTNN.LG,0,Active position (set manual price if yfinance fails)
+NB,NG,400,0,NGN,yfinance,NB.LG,0,Active position (set manual price if yfinance fails)
+NGXGROUP,NG,400,0,NGN,yfinance,NGXGROUP.LG,0,Active position (set manual price if yfinance fails)
+OKOMUOIL,NG,10,0,NGN,yfinance,OKOMUOIL.LG,0,Active position (set manual price if yfinance fails)
+PRESCO,NG,14,0,NGN,yfinance,PRESCO.LG,0,Active position (set manual price if yfinance fails)
+SEPLAT,NG,5,0,NGN,yfinance,SEPLAT.LG,0,Active position (set manual price if yfinance fails)
+OANDO,NG,230,0,NGN,yfinance,OANDO.LG,0,Active position (set manual price if yfinance fails)

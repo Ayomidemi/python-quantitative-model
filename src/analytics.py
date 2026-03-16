@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 from datetime import datetime
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Dict
 
@@ -46,7 +48,8 @@ def _download_returns(symbols: Dict[str, str], period: str = "1y") -> pd.DataFra
     for ticker, symbol in symbols.items():
         if not symbol or pd.isna(symbol):
             continue
-        hist = yf.Ticker(symbol).history(period=period)
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            hist = yf.Ticker(symbol).history(period=period)
         if hist.empty:
             continue
         ret = hist["Close"].pct_change().dropna()

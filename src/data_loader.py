@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from typing import Dict, Iterable, Optional
 
@@ -45,7 +47,9 @@ def _last_close(symbol: str, period: str = "7d") -> Optional[float]:
     symbol = str(symbol).strip()
     if not symbol or symbol.lower() == "nan":
         return None
-    history = yf.Ticker(symbol).history(period=period)
+    # Silence noisy provider logs for unsupported symbols.
+    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+        history = yf.Ticker(symbol).history(period=period)
     if history.empty:
         return None
     close = history["Close"].dropna()
