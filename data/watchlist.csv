@@ -1,0 +1,4 @@
+ticker,exchange,symbol_yf,date_added,target_price,currency,notes
+NVDA,US,NVDA,2026-01-15,950,USD,AI momentum watch
+GOOGL,US,GOOGL,2026-02-01,200,USD,Missed dip entry example
+DANGSUGAR,NG,,2026-02-10,60,NGN,NG stock tracked manually for now

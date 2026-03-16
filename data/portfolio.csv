@@ -1,0 +1,4 @@
+ticker,exchange,shares,avg_cost,currency,price_source,symbol_yf,manual_price,notes
+AAPL,US,5,195.00,USD,yfinance,AAPL,,Core US tech holding
+MSFT,US,3,405.00,USD,yfinance,MSFT,,Cloud/AI exposure
+ZENITHBANK,NG,2000,40.00,NGN,manual,,47.50,Nigerian bank example with manual pricing
