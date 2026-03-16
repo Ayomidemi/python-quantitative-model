@@ -246,7 +246,56 @@ def render_allocation(snapshot: pd.DataFrame) -> None:
     st.bar_chart(alloc, x="ticker", y="position_value_base")
 
 
-def render_data_quality(snapshot: pd.DataFrame) -> None:
+@st.dialog("Set Missing NG Prices")
+def set_missing_ng_prices_dialog(pending_ng: pd.DataFrame, portfolio: pd.DataFrame) -> None:
+    st.caption("Enter latest market prices in NGN. These rows will be switched to manual pricing.")
+    defaults: dict[str, float] = {}
+    for _, row in pending_ng.iterrows():
+        ticker = str(row["ticker"])
+        current = portfolio.loc[portfolio["ticker"] == ticker, "manual_price"]
+        base = 0.0
+        if not current.empty and pd.notna(current.iloc[0]):
+            try:
+                base = float(current.iloc[0])
+            except Exception:
+                base = 0.0
+        defaults[ticker] = base
+
+    with st.form("set_missing_ng_prices_form"):
+        price_inputs: dict[str, float] = {}
+        for ticker, default in defaults.items():
+            price_inputs[ticker] = st.number_input(
+                f"{ticker} price (NGN)",
+                min_value=0.0,
+                value=float(default),
+                step=0.01,
+                key=f"missing_ng_{ticker}",
+            )
+
+        submitted = st.form_submit_button("Save NG Prices", type="primary")
+        if submitted:
+            invalid = [t for t, p in price_inputs.items() if p <= 0]
+            if invalid:
+                st.error(f"Please enter prices > 0 for: {', '.join(invalid)}")
+                return
+            updated = portfolio.copy()
+            for ticker, price in price_inputs.items():
+                mask = (updated["ticker"].astype(str).str.upper() == ticker.upper()) & (
+                    updated["exchange"].astype(str).str.upper() == "NG"
+                )
+                updated.loc[mask, "price_source"] = "manual"
+                updated.loc[mask, "manual_price"] = float(price)
+
+            try:
+                _save_portfolio(updated)
+                st.cache_data.clear()
+                st.success("NG prices saved. Recalculating...")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Could not save NG prices: {exc}")
+
+
+def render_data_quality(snapshot: pd.DataFrame, portfolio: pd.DataFrame) -> None:
     pending = snapshot[snapshot["market_price"] <= 0].copy()
     if pending.empty:
         st.success("All positions have non-zero prices.")
@@ -261,6 +310,9 @@ def render_data_quality(snapshot: pd.DataFrame) -> None:
         use_container_width=True,
         hide_index=True,
     )
+    pending_ng = pending[pending["exchange"].astype(str).str.upper() == "NG"]
+    if not pending_ng.empty and st.button("Set Missing NG Prices", type="primary"):
+        set_missing_ng_prices_dialog(pending_ng, portfolio)
 
 
 def render_forecast(portfolio: pd.DataFrame, watchlist: pd.DataFrame) -> None:
@@ -367,7 +419,7 @@ def main() -> None:
     with tab_overview:
         render_header(snapshot)
         st.divider()
-        render_data_quality(snapshot)
+        render_data_quality(snapshot, portfolio)
         st.divider()
         render_portfolio_table(snapshot)
         st.divider()
