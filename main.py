@@ -28,6 +28,7 @@ from src.forecasting import (
 )
 from src.ledger import build_ledger_report
 from src.monte_carlo import simulate_portfolio_paths
+from src.validation import validate_portfolio_inputs, validate_transactions_inputs
 
 
 def _needed_fx_pairs(currencies: Iterable[str]) -> set[tuple[str, str]]:
@@ -192,6 +193,37 @@ def cmd_ledger_summary() -> None:
     print(out.to_string(index=False, float_format=lambda x: f"{x:,.2f}"))
 
 
+def cmd_validate_data() -> None:
+    portfolio = load_portfolio()
+    transactions = load_transactions()
+
+    p_report = validate_portfolio_inputs(portfolio)
+    t_report = validate_transactions_inputs(transactions)
+
+    print("\n=== Data Validation Report ===")
+
+    if p_report.errors:
+        print("\nPortfolio errors:")
+        for msg in p_report.errors:
+            print(f"- {msg}")
+    if p_report.warnings:
+        print("\nPortfolio warnings:")
+        for msg in p_report.warnings:
+            print(f"- {msg}")
+
+    if t_report.errors:
+        print("\nTransaction errors:")
+        for msg in t_report.errors:
+            print(f"- {msg}")
+    if t_report.warnings:
+        print("\nTransaction warnings:")
+        for msg in t_report.warnings:
+            print(f"- {msg}")
+
+    if not (p_report.errors or p_report.warnings or t_report.errors or t_report.warnings):
+        print("No issues found. Inputs look clean.")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Personal Quant Dashboard")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -214,6 +246,7 @@ def parse_args() -> argparse.Namespace:
 
     sub.add_parser("watchlist-review", help="Evaluate watchlist misses since add date")
     sub.add_parser("ledger-summary", help="Summarize realized and unrealized P&L from transactions")
+    sub.add_parser("validate-data", help="Run lightweight data health checks before analysis")
     return parser.parse_args()
 
 
@@ -229,6 +262,8 @@ def main() -> None:
         cmd_watchlist_review()
     elif args.command == "ledger-summary":
         cmd_ledger_summary()
+    elif args.command == "validate-data":
+        cmd_validate_data()
 
 
 if __name__ == "__main__":

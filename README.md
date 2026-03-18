@@ -98,6 +98,12 @@ python main.py watchlist-review
 python main.py ledger-summary
 ```
 
+### 6) Validate your input data (recommended before analysis)
+
+```bash
+python main.py validate-data
+```
+
 ## Personal dashboard frontend (Streamlit)
 
 Run your own local dashboard UI:
