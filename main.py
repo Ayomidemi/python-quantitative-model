@@ -13,13 +13,20 @@ from src.analytics import (
     save_allocation_chart,
 )
 from src.config import BASE_CURRENCY
-from src.data_loader import fetch_fx_rates, fetch_prices, load_portfolio, load_watchlist
+from src.data_loader import (
+    fetch_fx_rates,
+    fetch_prices,
+    load_portfolio,
+    load_transactions,
+    load_watchlist,
+)
 from src.forecasting import (
     fetch_returns,
     garch_vol_forecast,
     momentum_signal,
     rolling_mean_forecast,
 )
+from src.ledger import build_ledger_report
 from src.monte_carlo import simulate_portfolio_paths
 
 
@@ -150,6 +157,41 @@ def cmd_watchlist_review() -> None:
     print(review.to_string(index=False, float_format=lambda x: f"{x:,.2f}"))
 
 
+def cmd_ledger_summary() -> None:
+    portfolio = load_portfolio()
+    transactions = load_transactions()
+    prices = fetch_prices(portfolio)
+    all_ccy = set(portfolio["currency"].tolist()) | set(transactions["currency"].tolist())
+    fx = fetch_fx_rates(_needed_fx_pairs(all_ccy))
+    snapshot = build_portfolio_snapshot(portfolio, prices, fx)
+
+    report = build_ledger_report(transactions, snapshot, fx)
+    totals = report.totals
+    print("\n=== Ledger P&L Summary ===")
+    print(f"Base currency: {BASE_CURRENCY}")
+    print(f"Realized P&L:   {totals['realized_pnl_base']:,.2f} {BASE_CURRENCY}")
+    print(f"Unrealized P&L: {totals['unrealized_pnl_base']:,.2f} {BASE_CURRENCY}")
+    print(f"Total P&L:      {totals['total_pnl_base']:,.2f} {BASE_CURRENCY}")
+    print(f"Market Value:   {totals['market_value_base']:,.2f} {BASE_CURRENCY}")
+
+    if report.positions.empty:
+        print("\nNo transactions yet. Add rows to data/transactions.csv.")
+        return
+
+    cols = [
+        "ticker",
+        "open_quantity",
+        "avg_cost_local",
+        "market_price",
+        "realized_pnl_base",
+        "unrealized_pnl_base",
+        "total_pnl_base",
+    ]
+    out = report.positions[cols].copy()
+    print("\nBy ticker:")
+    print(out.to_string(index=False, float_format=lambda x: f"{x:,.2f}"))
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Personal Quant Dashboard")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -171,6 +213,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     sub.add_parser("watchlist-review", help="Evaluate watchlist misses since add date")
+    sub.add_parser("ledger-summary", help="Summarize realized and unrealized P&L from transactions")
     return parser.parse_args()
 
 
@@ -184,6 +227,8 @@ def main() -> None:
         cmd_simulate(args.days, args.sims, args.annual_return)
     elif args.command == "watchlist-review":
         cmd_watchlist_review()
+    elif args.command == "ledger-summary":
+        cmd_ledger_summary()
 
 
 if __name__ == "__main__":

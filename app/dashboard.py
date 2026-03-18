@@ -19,7 +19,13 @@ from src.analytics import (
     portfolio_risk_metrics,
 )
 from src.config import BASE_CURRENCY, DATA_DIR
-from src.data_loader import fetch_fx_rates, fetch_prices, load_portfolio, load_watchlist
+from src.data_loader import (
+    fetch_fx_rates,
+    fetch_prices,
+    load_portfolio,
+    load_transactions,
+    load_watchlist,
+)
 from src.forecasting import (
     fetch_returns,
     garch_vol_forecast,
@@ -27,11 +33,13 @@ from src.forecasting import (
     rolling_mean_forecast,
 )
 from src.monte_carlo import simulate_portfolio_paths
+from src.ledger import TRANSACTION_COLUMNS, build_ledger_report, normalize_transactions
 
 
 st.set_page_config(page_title="Personal Quant Dashboard", page_icon="📈", layout="wide")
 
 PORTFOLIO_PATH = DATA_DIR / "portfolio.csv"
+TRANSACTIONS_PATH = DATA_DIR / "transactions.csv"
 PORTFOLIO_COLUMNS = [
     "ticker",
     "exchange",
@@ -50,13 +58,15 @@ def needed_fx_pairs(currencies: list[str]) -> set[tuple[str, str]]:
 
 
 @st.cache_data(ttl=300)
-def load_all_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def load_all_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[tuple[str, str], float]]:
     portfolio = load_portfolio()
     watchlist = load_watchlist()
+    transactions = load_transactions()
     prices = fetch_prices(portfolio)
-    fx = fetch_fx_rates(needed_fx_pairs(portfolio["currency"].tolist()))
+    all_currencies = set(portfolio["currency"].tolist()) | set(transactions["currency"].tolist())
+    fx = fetch_fx_rates(needed_fx_pairs(list(all_currencies)))
     snapshot = build_portfolio_snapshot(portfolio, prices, fx)
-    return portfolio, watchlist, snapshot
+    return portfolio, watchlist, transactions, snapshot, fx
 
 
 def render_header(snapshot: pd.DataFrame) -> None:
@@ -111,6 +121,20 @@ def _save_portfolio(df: pd.DataFrame) -> None:
     if clean.empty:
         raise ValueError("Portfolio cannot be empty after validation.")
     clean.to_csv(PORTFOLIO_PATH, index=False)
+
+
+def _normalize_transactions_df(df: pd.DataFrame) -> pd.DataFrame:
+    clean = normalize_transactions(df)
+    # Keep expected columns even if empty after filtering
+    for col in TRANSACTION_COLUMNS:
+        if col not in clean.columns:
+            clean[col] = np.nan
+    return clean[TRANSACTION_COLUMNS]
+
+
+def _save_transactions(df: pd.DataFrame) -> None:
+    clean = _normalize_transactions_df(df)
+    clean.to_csv(TRANSACTIONS_PATH, index=False)
 
 
 @st.dialog("Add Portfolio Position")
@@ -200,6 +224,48 @@ def render_portfolio_inputs(portfolio: pd.DataFrame) -> None:
             st.rerun()
         except Exception as exc:
             st.error(f"Save failed: {exc}")
+
+
+@st.dialog("Add Transaction")
+def add_transaction_dialog(existing_df: pd.DataFrame) -> None:
+    with st.form("add_transaction_form", clear_on_submit=True):
+        st.caption("Record a buy or sell to compute realized/unrealized P&L.")
+        c1, c2, c3 = st.columns(3)
+        date = c1.date_input("Date")
+        ticker = c2.text_input("Ticker", placeholder="AMZN")
+        exchange = c3.selectbox("Exchange", options=["US", "NG"])
+
+        c4, c5, c6 = st.columns(3)
+        side = c4.selectbox("Side", options=["buy", "sell"])
+        quantity = c5.number_input("Quantity", min_value=0.0, value=0.0, step=0.0001, format="%.8f")
+        price = c6.number_input("Price", min_value=0.0, value=0.0, step=0.01)
+
+        c7, c8 = st.columns(2)
+        currency = c7.selectbox("Currency", options=["USD", "NGN"])
+        fee = c8.number_input("Fee", min_value=0.0, value=0.0, step=0.01)
+        notes = st.text_input("Notes (optional)")
+
+        submitted = st.form_submit_button("Save Transaction", type="primary")
+        if submitted:
+            row: dict[str, Any] = {
+                "date": date,
+                "ticker": ticker,
+                "exchange": exchange,
+                "side": side,
+                "quantity": quantity,
+                "price": price,
+                "currency": currency,
+                "fee": fee,
+                "notes": notes,
+            }
+            try:
+                updated = pd.concat([existing_df, pd.DataFrame([row])], ignore_index=True)
+                _save_transactions(updated)
+                st.cache_data.clear()
+                st.success("Transaction saved.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Could not save transaction: {exc}")
 
 
 def render_portfolio_table(snapshot: pd.DataFrame) -> None:
@@ -391,6 +457,90 @@ def render_monte_carlo(snapshot: pd.DataFrame) -> None:
     c4.metric("Loss Probability", f"{result.prob_loss * 100:.2f}%")
 
 
+def render_ledger(transactions: pd.DataFrame, snapshot: pd.DataFrame, fx: dict[tuple[str, str], float]) -> None:
+    st.subheader("Transaction Ledger")
+    st.caption("Use transactions for true realized/unrealized P&L instead of only static holdings.")
+    st.info(
+        "Rule: add every buy/sell here. Realized P&L is calculated from sells against your running cost basis."
+    )
+
+    b1, b2 = st.columns([1, 1])
+    if b1.button("Add Transaction", use_container_width=True):
+        add_transaction_dialog(transactions.copy())
+
+    editable = transactions.copy()
+    for col in TRANSACTION_COLUMNS:
+        if col not in editable.columns:
+            editable[col] = np.nan
+    editable = editable[TRANSACTION_COLUMNS]
+
+    edited = st.data_editor(
+        editable,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="dynamic",
+        column_config={
+            "side": st.column_config.SelectboxColumn("Side", options=["buy", "sell"]),
+            "exchange": st.column_config.SelectboxColumn("Exchange", options=["US", "NG"]),
+            "currency": st.column_config.SelectboxColumn("Currency", options=["USD", "NGN"]),
+            "quantity": st.column_config.NumberColumn("Quantity", min_value=0.0, format="%.8f"),
+            "price": st.column_config.NumberColumn("Price", min_value=0.0, format="%.4f"),
+            "fee": st.column_config.NumberColumn("Fee", min_value=0.0, format="%.4f"),
+        },
+    )
+
+    if b2.button("Save Transactions", type="primary", use_container_width=True):
+        try:
+            _save_transactions(pd.DataFrame(edited))
+            st.cache_data.clear()
+            st.success("Transactions saved.")
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Save failed: {exc}")
+
+    try:
+        report = build_ledger_report(transactions, snapshot, fx)
+    except Exception as exc:
+        st.error(f"Ledger calculation error: {exc}")
+        return
+
+    totals = report.totals
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Realized P&L", f"{totals['realized_pnl_base']:,.2f} {BASE_CURRENCY}")
+    c2.metric("Unrealized P&L", f"{totals['unrealized_pnl_base']:,.2f} {BASE_CURRENCY}")
+    c3.metric("Total P&L", f"{totals['total_pnl_base']:,.2f} {BASE_CURRENCY}")
+    c4.metric("Open Market Value", f"{totals['market_value_base']:,.2f} {BASE_CURRENCY}")
+
+    if report.positions.empty:
+        st.warning("No valid transactions yet. Add buys/sells to unlock true P&L tracking.")
+        return
+
+    view = report.positions[
+        [
+            "ticker",
+            "open_quantity",
+            "avg_cost_local",
+            "market_price",
+            "realized_pnl_base",
+            "unrealized_pnl_base",
+            "total_pnl_base",
+        ]
+    ].copy()
+    st.dataframe(
+        view,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "open_quantity": st.column_config.NumberColumn("Open Qty", format="%.8f"),
+            "avg_cost_local": st.column_config.NumberColumn("Avg Cost", format="%.4f"),
+            "market_price": st.column_config.NumberColumn("Market Price", format="%.4f"),
+            "realized_pnl_base": st.column_config.NumberColumn("Realized P&L", format="%.2f"),
+            "unrealized_pnl_base": st.column_config.NumberColumn("Unrealized P&L", format="%.2f"),
+            "total_pnl_base": st.column_config.NumberColumn("Total P&L", format="%.2f"),
+        },
+    )
+
+
 def main() -> None:
     st.title("📈 Personal Quant Dashboard")
     st.caption("Portfolio analytics, forecasting, and simulation for your personal use.")
@@ -407,13 +557,13 @@ def main() -> None:
             st.rerun()
 
     try:
-        portfolio, watchlist, snapshot = load_all_data()
+        portfolio, watchlist, transactions, snapshot, fx = load_all_data()
     except Exception as exc:
         st.error(f"Could not load data: {exc}")
         st.stop()
 
-    tab_overview, tab_inputs, tab_forecast, tab_sim, tab_watch = st.tabs(
-        ["Overview", "Portfolio Inputs", "Forecast", "Simulation", "Watchlist"]
+    tab_overview, tab_inputs, tab_ledger, tab_forecast, tab_sim, tab_watch = st.tabs(
+        ["Overview", "Portfolio Inputs", "Ledger", "Forecast", "Simulation", "Watchlist"]
     )
 
     with tab_overview:
@@ -427,6 +577,9 @@ def main() -> None:
 
     with tab_inputs:
         render_portfolio_inputs(portfolio)
+
+    with tab_ledger:
+        render_ledger(transactions, snapshot, fx)
 
     with tab_forecast:
         render_forecast(portfolio, watchlist)

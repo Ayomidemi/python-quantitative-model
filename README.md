@@ -23,6 +23,7 @@ Lightweight Python project for your personal portfolio analysis, forecasting, an
 - `src/forecasting.py` - momentum / mean / GARCH forecast helpers.
 - `src/monte_carlo.py` - geometric Brownian motion simulation engine.
 - `data/portfolio.csv` - your current holdings.
+- `data/transactions.csv` - buy/sell ledger for true realized/unrealized P&L.
 - `data/watchlist.csv` - your watchlist and missed opportunities.
 - `outputs/` - generated plots.
 
@@ -91,6 +92,12 @@ If `--annual-return` is omitted, default is `0.12`.
 python main.py watchlist-review
 ```
 
+### 5) Ledger P&L summary (from transactions)
+
+```bash
+python main.py ledger-summary
+```
+
 ## Personal dashboard frontend (Streamlit)
 
 Run your own local dashboard UI:
@@ -104,6 +111,7 @@ What you get in the UI:
 
 - Portfolio value, P&L, return, annualized volatility
 - Positions table and allocation chart
+- Transaction ledger tab with realized/unrealized/total P&L
 - Single-ticker forecasting panel (momentum, mean return, GARCH/historical vol)
 - Monte Carlo simulation controls and risk outcomes
 

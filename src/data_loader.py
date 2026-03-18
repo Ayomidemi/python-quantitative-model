@@ -41,6 +41,26 @@ def load_watchlist(path: Optional[str] = None) -> pd.DataFrame:
     return pd.read_csv(csv_path)
 
 
+def load_transactions(path: Optional[str] = None) -> pd.DataFrame:
+    csv_path = DATA_DIR / "transactions.csv" if path is None else path
+    df = pd.read_csv(csv_path)
+    required_cols = {
+        "date",
+        "ticker",
+        "exchange",
+        "side",
+        "quantity",
+        "price",
+        "currency",
+        "fee",
+        "notes",
+    }
+    missing = required_cols.difference(df.columns)
+    if missing:
+        raise ValueError(f"transactions.csv missing columns: {sorted(missing)}")
+    return df
+
+
 def _last_close(symbol: str, period: str = "7d") -> Optional[float]:
     if pd.isna(symbol):
         return None
