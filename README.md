@@ -14,6 +14,7 @@ Lightweight Python project for your personal portfolio analysis, forecasting, an
   - GARCH(1,1) volatility forecast (if enough data)
 - Runs Monte Carlo portfolio simulations.
 - Reviews watchlist opportunities since date added.
+- Optional **value screen**: ranks symbols by simple P/E + P/B vs your batch (`value-screen`).
 
 ## Project structure
 
@@ -22,10 +23,12 @@ Lightweight Python project for your personal portfolio analysis, forecasting, an
 - `src/analytics.py` - portfolio metrics and allocation chart.
 - `src/forecasting.py` - momentum / mean / GARCH forecast helpers.
 - `src/monte_carlo.py` - geometric Brownian motion simulation engine.
+- `src/value_screen.py` - simple value metrics (P/E, P/B) from Yahoo for ranking.
 - `data/portfolio.csv` - your current holdings.
 - `data/transactions.csv` - buy/sell ledger for true realized/unrealized P&L.
 - `data/watchlist.csv` - your watchlist and missed opportunities.
 - `data/policy.md` - **your** one-page investment rules (limits, rhythm, what you won’t do).
+- `data/value_playbook.md` - value sleeve: what to buy / when to sell (rules).
 - `outputs/` - generated plots.
 
 ## Setup
@@ -109,6 +112,20 @@ python main.py ledger-summary
 python main.py validate-data
 ```
 
+### 7) Value screen (simple P/E + P/B rank vs your batch)
+
+Uses Yahoo fundamentals — **screen only**, verify before buying.
+
+```bash
+# From watchlist symbols (needs symbol_yf filled)
+python main.py value-screen
+
+# Or explicit tickers
+python main.py value-screen --no-watchlist --symbols GOOGL,NVDA,JPM
+```
+
+See `data/value_playbook.md` for how to use this without falling into value traps.
+
 ## Personal dashboard frontend (Streamlit)
 
 Run your own local dashboard UI:
@@ -134,7 +151,6 @@ What you get in the UI:
 
 ## Next upgrades (when ready)
 
-- Add broker CSV import to avoid manual typing.
-- Add transaction-level ledger (`buy/sell/dividend`) for realized P&L.
-- Add portfolio optimization (min variance, target return).
-- Add Streamlit dashboard for UI.
+- Broker CSV import for holdings and fills.
+- Deeper value screens (quality filters, debt, earnings stability).
+- Simple backtest for monthly rebalance rules.

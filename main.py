@@ -29,6 +29,7 @@ from src.forecasting import (
 from src.ledger import build_ledger_report
 from src.monte_carlo import simulate_portfolio_paths
 from src.validation import validate_portfolio_inputs, validate_transactions_inputs
+from src.value_screen import build_value_table
 
 
 def _needed_fx_pairs(currencies: Iterable[str]) -> set[tuple[str, str]]:
@@ -224,6 +225,60 @@ def cmd_validate_data() -> None:
         print("No issues found. Inputs look clean.")
 
 
+def cmd_value_screen(from_watchlist: bool, symbols: str | None) -> None:
+    entries: list[tuple[str, str]] = []
+    if from_watchlist:
+        wl = load_watchlist()
+        if "symbol_yf" not in wl.columns:
+            raise ValueError("watchlist.csv must include symbol_yf.")
+        for _, row in wl.iterrows():
+            raw = row.get("symbol_yf")
+            if pd.isna(raw):
+                continue
+            sym = str(raw).strip()
+            if not sym or sym.lower() == "nan":
+                continue
+            ticker = str(row.get("ticker", sym)).strip()
+            entries.append((ticker, sym))
+    if symbols:
+        for part in symbols.split(","):
+            sym = part.strip()
+            if sym:
+                entries.append((sym, sym))
+    if not entries:
+        print("No symbols. Add symbol_yf to watchlist.csv or pass --symbols AAPL,MSFT")
+        return
+
+    seen_sym: set[str] = set()
+    deduped: list[tuple[str, str]] = []
+    for t, s in entries:
+        key = s.upper()
+        if key in seen_sym:
+            continue
+        seen_sym.add(key)
+        deduped.append((t, s))
+    df = build_value_table(deduped)
+    if df.empty:
+        print("No data returned.")
+        return
+
+    print("\n=== Value screen (lower P/E & P/B vs this batch → higher value_score) ===")
+    cols = [
+        "ticker",
+        "name",
+        "sector",
+        "trailing_pe",
+        "forward_pe",
+        "price_to_book",
+        "value_score",
+        "error",
+    ]
+    show = df[[c for c in cols if c in df.columns]]
+    with pd.option_context("display.max_columns", None, "display.width", 120):
+        print(show.to_string(index=False, float_format=lambda x: f"{x:,.2f}" if pd.notna(x) else ""))
+    print("\nSee data/value_playbook.md for how to use this (not blind picks).")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Personal Quant Dashboard")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -247,6 +302,21 @@ def parse_args() -> argparse.Namespace:
     sub.add_parser("watchlist-review", help="Evaluate watchlist misses since add date")
     sub.add_parser("ledger-summary", help="Summarize realized and unrealized P&L from transactions")
     sub.add_parser("validate-data", help="Run lightweight data health checks before analysis")
+
+    vscreen = sub.add_parser(
+        "value-screen",
+        help="Rank tickers by simple value metrics (P/E, P/B) from Yahoo",
+    )
+    vscreen.add_argument(
+        "--no-watchlist",
+        action="store_true",
+        help="Do not load symbols from watchlist.csv",
+    )
+    vscreen.add_argument(
+        "--symbols",
+        default=None,
+        help="Comma-separated Yahoo symbols (e.g. AAPL,MSFT). Used with or without watchlist.",
+    )
     return parser.parse_args()
 
 
@@ -264,6 +334,11 @@ def main() -> None:
         cmd_ledger_summary()
     elif args.command == "validate-data":
         cmd_validate_data()
+    elif args.command == "value-screen":
+        cmd_value_screen(
+            from_watchlist=not getattr(args, "no_watchlist", False),
+            symbols=getattr(args, "symbols", None),
+        )
 
 
 if __name__ == "__main__":
