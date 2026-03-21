@@ -25,6 +25,7 @@ Lightweight Python project for your personal portfolio analysis, forecasting, an
 - `data/portfolio.csv` - your current holdings.
 - `data/transactions.csv` - buy/sell ledger for true realized/unrealized P&L.
 - `data/watchlist.csv` - your watchlist and missed opportunities.
+- `data/policy.md` - **your** one-page investment rules (limits, rhythm, what you won’t do).
 - `outputs/` - generated plots.
 
 ## Setup
@@ -34,6 +35,10 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## Investment policy (keep yourself honest)
+
+Fill in `data/policy.md` once, then tweak only when your situation changes. It aligns how you trade (especially with per-trade fees) with what the dashboard measures.
 
 ## Input format
 
